@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:xml/xml.dart' as xml;
 import 'package:flutter_webview_plugin/flutter_webview_plugin.dart' as webview;
+import 'dart:async';
 
 void main() => runApp(new MyApp());
 
@@ -31,6 +32,10 @@ class RSSFeed extends StatefulWidget {
 }
 
 class _RSSFeedState extends State<RSSFeed> {
+  final flutterWebviewPlugin = new webview.FlutterWebviewPlugin();
+  StreamSubscription _onDestroy;
+  bool webviewAlive;
+
   String unpackTitleFeedItem(FeedItem feedItem) {
     return "${feedItem.getTitle()}";
   }
@@ -40,8 +45,36 @@ class _RSSFeedState extends State<RSSFeed> {
   }
 
   @override
+  initState() {
+    super.initState();
+
+    flutterWebviewPlugin.close();
+
+    _onDestroy = flutterWebviewPlugin.onDestroy.listen((_) {
+      if (mounted) {
+        webviewAlive = false;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    flutterWebviewPlugin.dispose();
+    super.dispose();
+  }
+
+  Future<bool> _willPopCallback() async {
+    if (webviewAlive == true) {
+      flutterWebviewPlugin.close();
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return new Scaffold(
+    return new WillPopScope(child: new Scaffold(
       appBar: new AppBar(
         title: new Text(widget.title),
       ),
@@ -57,14 +90,14 @@ class _RSSFeedState extends State<RSSFeed> {
                   : widget.error),
               onTap: () async {
                 final FeedItem feedItem = widget.rssOutput[index];
-                var flutterWebviewPlugin = new webview.FlutterWebviewPlugin();
-
+                webviewAlive = true;
                 flutterWebviewPlugin.launch(feedItem.getLink());
                 await flutterWebviewPlugin.onDestroy.first;
               });
         },
       ),
-    );
+    ),
+        onWillPop: _willPopCallback);
   }
 }
 
