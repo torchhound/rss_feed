@@ -132,7 +132,8 @@ class _RSSHomePageState extends State<RSSHomePage> {
     final file = await _localFile;
     var outputStream = file.openWrite();
     for (String feed in feeds) {
-      outputStream.write(feed);
+      print(feed);
+      outputStream.write(feed + "\n");
     }
     outputStream.close();
   }
@@ -147,6 +148,7 @@ class _RSSHomePageState extends State<RSSHomePage> {
         .transform(new LineSplitter())
         .listen((String line) {
           feeds.add(line);
+          print(line);
         },
         onDone: () {
           print('File is now closed.');
