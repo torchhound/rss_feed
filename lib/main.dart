@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:xml/xml.dart' as xml;
 import 'package:flutter_webview_plugin/flutter_webview_plugin.dart' as webview;
 import 'dart:async';
+import 'package:path_provider/path_provider.dart';
 
 void main() => runApp(new MyApp());
 
@@ -25,7 +26,7 @@ class RSSFeed extends StatefulWidget {
 
   final String title;
   final String error;
-  List<FeedItem> rssOutput = [];
+  final List<FeedItem> rssOutput;
 
   @override
   _RSSFeedState createState() => new _RSSFeedState();
@@ -60,6 +61,7 @@ class _RSSFeedState extends State<RSSFeed> {
   @override
   void dispose() {
     flutterWebviewPlugin.dispose();
+    _onDestroy.cancel();
     super.dispose();
   }
 
@@ -74,29 +76,31 @@ class _RSSFeedState extends State<RSSFeed> {
 
   @override
   Widget build(BuildContext context) {
-    return new WillPopScope(child: new Scaffold(
-      appBar: new AppBar(
-        title: new Text(widget.title),
-      ),
-      body: new ListView.builder(
-        itemCount: widget.rssOutput.length != 0 ? widget.rssOutput.length : 1,
-        itemBuilder: (context, index) {
-          return new ListTile(
-              title: new Text(widget.rssOutput.length != 0
-                  ? '${unpackTitleFeedItem(widget.rssOutput[index])}'
-                  : widget.error),
-              subtitle: new Text(widget.rssOutput.length != 0
-                  ? '${unpackSubtitleFeedItem(widget.rssOutput[index])}'
-                  : widget.error),
-              onTap: () async {
-                final FeedItem feedItem = widget.rssOutput[index];
-                webviewAlive = true;
-                flutterWebviewPlugin.launch(feedItem.getLink());
-                await flutterWebviewPlugin.onDestroy.first;
-              });
-        },
-      ),
-    ),
+    return new WillPopScope(
+        child: new Scaffold(
+          appBar: new AppBar(
+            title: new Text(widget.title),
+          ),
+          body: new ListView.builder(
+            itemCount:
+                widget.rssOutput.length != 0 ? widget.rssOutput.length : 1,
+            itemBuilder: (context, index) {
+              return new ListTile(
+                  title: new Text(widget.rssOutput.length != 0
+                      ? '${unpackTitleFeedItem(widget.rssOutput[index])}'
+                      : widget.error),
+                  subtitle: new Text(widget.rssOutput.length != 0
+                      ? '${unpackSubtitleFeedItem(widget.rssOutput[index])}'
+                      : widget.error),
+                  onTap: () async {
+                    final FeedItem feedItem = widget.rssOutput[index];
+                    webviewAlive = true;
+                    flutterWebviewPlugin.launch(feedItem.getLink());
+                    await flutterWebviewPlugin.onDestroy.first;
+                  });
+            },
+          ),
+        ),
         onWillPop: _willPopCallback);
   }
 }
@@ -112,6 +116,67 @@ class RSSHomePage extends StatefulWidget {
 
 class _RSSHomePageState extends State<RSSHomePage> {
   List<String> feeds = [];
+
+  Future<String> get _localPath async {
+    final directory = await getApplicationDocumentsDirectory();
+    return directory.path;
+  }
+
+  Future<File> get _localFile async {
+    final path = await _localPath;
+    return new File('$path/feeds.txt');
+  }
+
+  void writeFeeds(List<String> feeds) async {
+    print("writeFeeds");
+    final file = await _localFile;
+    var outputStream = file.openWrite();
+    for (String feed in feeds) {
+      outputStream.write(feed);
+    }
+    outputStream.close();
+  }
+
+  Future<bool> readFeeds() async {
+    try {
+      print("readFeeds");
+      final file = await _localFile;
+      Stream<List<int>> inputStream = file.openRead();
+      inputStream
+        .transform(utf8.decoder)
+        .transform(new LineSplitter())
+        .listen((String line) {
+          feeds.add(line);
+        },
+        onDone: () {
+          print('File is now closed.');
+          print(feeds);
+         },
+        onError: (e) {
+          print(e.toString());
+        });
+      return true;
+    } catch (e) {
+      print("readFeeds failed");
+      return false;
+    }
+  }
+
+  @override
+  initState() {
+    super.initState();
+    if (mounted) {
+      setState(() {
+        readFeeds();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    writeFeeds(feeds);
+    super.dispose();
+  }
 
   FeedItem parseItem(xml.XmlElement xml) {
     String title = xml.findElements('title').single.text;
@@ -153,7 +218,6 @@ class _RSSHomePageState extends State<RSSHomePage> {
       context: context,
       child: new _SystemPadding(
         child: new AlertDialog(
-          contentPadding: const EdgeInsets.all(16.0),
           content: new Row(
             children: <Widget>[
               new Expanded(
@@ -162,6 +226,7 @@ class _RSSHomePageState extends State<RSSHomePage> {
                   onSubmitted: (submitted) {
                     setState(() {
                       feeds.add(submitted);
+                      writeFeeds(feeds);
                       Navigator.pop(context);
                     });
                   },
@@ -191,6 +256,7 @@ class _RSSHomePageState extends State<RSSHomePage> {
               onLongPress: () {
                 setState(() {
                   feeds.removeAt(index);
+                  writeFeeds(feeds);
                 });
               },
               onTap: () {
@@ -202,7 +268,7 @@ class _RSSHomePageState extends State<RSSHomePage> {
         onPressed: _addFeedDialog,
         tooltip: 'Add new RSS feed',
         child: new Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      ),
     );
   }
 }
@@ -216,7 +282,7 @@ class _SystemPadding extends StatelessWidget {
   Widget build(BuildContext context) {
     var mediaQuery = MediaQuery.of(context);
     return new AnimatedContainer(
-        padding: mediaQuery.padding,
+        padding: mediaQuery.viewInsets,
         duration: const Duration(milliseconds: 300),
         child: child);
   }
