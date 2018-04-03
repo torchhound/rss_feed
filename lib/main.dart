@@ -128,11 +128,9 @@ class _RSSHomePageState extends State<RSSHomePage> {
   }
 
   void writeFeeds(List<String> feeds) async {
-    print("writeFeeds");
     final file = await _localFile;
     var outputStream = file.openWrite();
     for (String feed in feeds) {
-      print(feed);
       outputStream.write(feed + "\n");
     }
     outputStream.close();
@@ -140,19 +138,17 @@ class _RSSHomePageState extends State<RSSHomePage> {
 
   Future<bool> readFeeds() async {
     try {
-      print("readFeeds");
       final file = await _localFile;
+      List<String> inputList = [];
       Stream<List<int>> inputStream = file.openRead();
       inputStream
         .transform(utf8.decoder)
         .transform(new LineSplitter())
         .listen((String line) {
-          feeds.add(line);
-          print(line);
+          inputList.add(line);
         },
         onDone: () {
-          print('File is now closed.');
-          print(feeds);
+          setState(() {feeds = inputList;});
          },
         onError: (e) {
           print(e.toString());
@@ -167,11 +163,7 @@ class _RSSHomePageState extends State<RSSHomePage> {
   @override
   initState() {
     super.initState();
-    if (mounted) {
-      setState(() {
-        readFeeds();
-      });
-    }
+    readFeeds();
   }
 
   @override
