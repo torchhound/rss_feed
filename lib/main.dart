@@ -187,7 +187,7 @@ class _RSSHomePageState extends State<RSSHomePage> {
       var request = await httpClient.getUrl(Uri.parse(feed));
       var response = await request.close();
       if (response.statusCode == HttpStatus.OK) {
-        String rawOut = await response.transform(UTF8.decoder).join();
+        String rawOut = await response.transform(utf8.decoder).join();
         Iterable xmlOut = xml.parse(rawOut).findAllElements('item');
         xmlOut.map((node) => parseItem(node)).forEach((a) => result.add(a));
       } else {
